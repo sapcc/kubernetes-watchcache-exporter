@@ -110,6 +110,12 @@ func main() {
 	for {
 		kubernetesCounterTests.Inc()
 
+		if !endpointsInformer.HasSynced() {
+			glog.Warning("Endpoint informer not in sync.")
+			time.Sleep(SLEEP_TIME)
+			continue
+		}
+
 		endpointsDirectList, err := clientset.CoreV1().Endpoints("").List(apiv1.ListOptions{})
 		if err != nil {
 			glog.Warningf("Could not get list of direct endpoints: %s", err)
@@ -143,13 +149,13 @@ func main() {
 				}
 
 				endpointCache := obj.(*v1.Endpoints)
-				if endpointDirect.GetResourceVersion() != endpointCache.GetResourceVersion() {
+				if epDiff := cmp.Diff(endpointDirect.Subsets, endpointCache.Subsets); epDiff != "" {
 					glog.V(5).Infof("Endpoint diff: %s", cmp.Diff(endpointDirect, endpointCache))
 					counter, err := kubernetesCounterVecDisparity.GetMetricWith(
 						map[string]string{
 							"namespace": ns,
 							"name":      name,
-							"endpoint":  cmp.Diff(endpointDirect.Subsets, endpointCache.Subsets),
+							"endpoint_diff":  epDiff,
 						},
 					)
 					if err != nil {
